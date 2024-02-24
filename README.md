@@ -14,5 +14,4 @@ Oscilloscope channel 1 is connected across a resistor in series with the generat
 
 Oscilloscope channel 2 is connected across a resistor in series with the indicator cathode to measure the current through the indicator circuit.
 
-A circuit diagram of the chloridometer circuit is shown below.
-[Circuit](circuit.png)
+A circuit diagram of the chloridometer circuit can be found [here](./circuit.png).
