@@ -1,4 +1,4 @@
-from WF_SDK import device, scope, wavegen
+from WF_SDK import device, scope, wavegen, static
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from threading import Thread
@@ -8,9 +8,6 @@ import sys
 import numpy as np
 from scipy import optimize
 
-#TODO: have program stop when indicator current rises above some threshold?
-#TODO: warn if restarting without saving data?
-
 # create gui window
 gui = tk.Tk()
 gui.title("Coulometry")
@@ -18,14 +15,16 @@ gui.geometry('850x500')
 gui.config(background="white")
 
 # set default measurement parameters
-generator_potential = 5.0  # volts 
-indicator_potential = 0.1  # volts
-generator_resistor  = 98.9 # ohms
-indicator_resistor  = 99.7 # ohms
-measure_period      = 0.5  # seconds
-measure_duration    = 30.0 # seconds
+generator_potential = 5.0   # volts 
+indicator_potential = 3.0   # volts
+generator_resistor  = 100.1 # ohms
+indicator_resistor  = 100.2 # ohms
+measure_period      = 0.5   # seconds
+measure_duration    = 30.0  # seconds
 generator_channel   = 1
 indicator_channel   = 2
+generator_dio_channel = 0
+indicator_dio_channel = 1
 
 # parameter inputs for gui
 # > > > >
@@ -208,7 +207,13 @@ def on_start():
     
     # connect to device
     device_data = device.open()
-
+    
+    # initialize the dio channels and turn both off
+    static.set_mode(device_data, generator_dio_channel, True)
+    static.set_mode(device_data, indicator_dio_channel, True)
+    static.set_state(device_data, generator_dio_channel, False)
+    static.set_state(device_data, indicator_dio_channel, False) 
+    
     # initialize the scope with default settings
     scope.open(device_data)
     
@@ -224,6 +229,9 @@ def on_start():
     wavegen.generate(device_data,channel=indicator_channel,function=wavegen.function.dc,offset=indicator_potential)
     wavegen.generate(device_data,channel=generator_channel,function=wavegen.function.dc,offset=generator_potential)
     
+    # turn on generator channel
+    static.set_state(device_data, generator_dio_channel, True)
+    
     # main loop for measuring the signal
     # > > > >
     print("Time (s), Indicator Current (mA), Generator Current (mA)")
@@ -234,8 +242,20 @@ def on_start():
                         
         # measure the signals
         timenow = time.monotonic()-starttime
-        indicator_resistor_potential = scope.measure(device_data,channel=indicator_channel)
+        
+        # measure generator signal with indicator circuit off
         generator_resistor_potential = scope.measure(device_data,channel=generator_channel)
+        
+        # turn  on indicator circuit and off generator circuit
+        static.set_state(device_data, generator_dio_channel, False)
+        static.set_state(device_data, indicator_dio_channel, True)
+        
+        # measure indicator signal with generator off
+        indicator_resistor_potential = scope.measure(device_data,channel=indicator_channel)
+        
+        # turn off indicator circuit and on generator circuit
+        static.set_state(device_data, indicator_dio_channel, False)
+        static.set_state(device_data, generator_dio_channel, True)
         
         # calculate current in mA
         indicator_resistor_current = indicator_resistor_potential/indicator_resistor*1.0E3
@@ -261,6 +281,9 @@ def on_start():
         # pause loop until next measurement time
         time.sleep(measure_period - ((time.monotonic()-starttime)%measure_period))
     # > > > >
+    
+    # turn off generator switch
+    static.set_state(device_data, generator_dio_channel, False)
     
     # reset the scope
     scope.close(device_data)
